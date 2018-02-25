@@ -39,25 +39,25 @@ public class HelperWebActivity extends HelperActivity {
                 .activity(activity)
                 .adapter(act)
                 .restoreWithCachedSnapshot(true)
-                .view(act.getTurbolinksView())
+                .view(act.getTurbolinksViewGroup().getTurbolinksView())
                 .visit(act.getRoute().getUrl());
     }
 
-    public void onReceivedError(int errorCode) {
+    public void onReceivedError(int errorCode, int tabIndex) {
         WritableMap params = Arguments.createMap();
         params.putInt("code", NETWORK_FAILURE);
         params.putInt("statusCode", 0);
         params.putString("description", "Network Failure.");
-        params.putInt("tabIndex", 0);
+        params.putInt("tabIndex", tabIndex);
         act.getEventEmitter().emit("turbolinksError", params);
     }
 
-    public void requestFailedWithStatusCode(int statusCode) {
+    public void requestFailedWithStatusCode(int statusCode, int tabIndex) {
         WritableMap params = Arguments.createMap();
         params.putInt("code", HTTP_FAILURE);
         params.putInt("statusCode", statusCode);
         params.putString("description", "HTTP Failure. Code:" + statusCode);
-        params.putInt("tabIndex", 0);
+        params.putInt("tabIndex", tabIndex);
         act.getEventEmitter().emit("turbolinksError", params);
     }
 

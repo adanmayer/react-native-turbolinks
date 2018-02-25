@@ -20,7 +20,7 @@ public class TurbolinksPagerAdapter extends PagerAdapter {
     public TurbolinksPagerAdapter(Context context, ArrayList<Bundle> routes) {
         for(Bundle bundle: routes) {
             TurbolinksRoute route = new TurbolinksRoute(bundle);
-            TurbolinksView webView = new TurbolinksView(context);
+            TurbolinksViewGroup webView = new TurbolinksViewGroup(context);
             ReactRootView nativeView = new ReactRootView(context);
             View view =  route.getUrl() != null ? webView : nativeView;
             view.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));

@@ -12,6 +12,7 @@ import android.webkit.JavascriptInterface;
 
 import com.basecamp.turbolinks.TurbolinksSession;
 import com.basecamp.turbolinks.TurbolinksView;
+import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.ReactRootView;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.WritableMap;
@@ -20,6 +21,7 @@ import com.reactlibrary.R;
 import com.reactlibrary.react.ReactAppCompatActivity;
 import com.reactlibrary.util.TurbolinksPagerAdapter;
 import com.reactlibrary.util.TurbolinksRoute;
+import com.reactlibrary.util.TurbolinksViewGroup;
 import com.reactlibrary.util.TurbolinksViewPager;
 
 import java.util.ArrayList;
@@ -114,10 +116,10 @@ public class TabbedActivity extends ReactAppCompatActivity implements GenericNat
     }
 
     @Override
-    public TurbolinksView getTurbolinksView() {
+    public TurbolinksViewGroup getTurbolinksViewGroup() {
         TurbolinksViewPager viewPager = findViewById(R.id.viewpager);
         TurbolinksPagerAdapter adapter = (TurbolinksPagerAdapter) viewPager.getAdapter();
-        return (TurbolinksView) adapter.getItem(viewPager.getCurrentItem());
+        return (TurbolinksViewGroup) adapter.getItem(viewPager.getCurrentItem());
     }
 
     @Override
@@ -131,11 +133,22 @@ public class TabbedActivity extends ReactAppCompatActivity implements GenericNat
     }
 
     @Override
+    public void renderComponent(TurbolinksRoute tRoute, int tabIndex) {
+        getTurbolinksViewGroupByIndex(tabIndex).renderComponent(getReactInstanceManager(), tRoute);
+    }
+
+    @Override
+    public void reload() {
+        getTurbolinksViewGroup().reload(getRoute().getUrl());
+    }
+
+    @Override
     public void onPageFinished() {
     }
 
     @Override
     public void onReceivedError(int errorCode) {
+        helperWebAct.onReceivedError(errorCode, viewPager.getCurrentItem());
     }
 
     @Override
@@ -144,6 +157,7 @@ public class TabbedActivity extends ReactAppCompatActivity implements GenericNat
 
     @Override
     public void requestFailedWithStatusCode(int statusCode) {
+        helperWebAct.requestFailedWithStatusCode(statusCode, viewPager.getCurrentItem());
     }
 
     @Override
@@ -187,9 +201,9 @@ public class TabbedActivity extends ReactAppCompatActivity implements GenericNat
                 ReactRootView rootView = (ReactRootView) view;
                 helperNativeAct.visitComponent(rootView, getReactInstanceManager(), route);
             }
-            if (view instanceof TurbolinksView) {
-                TurbolinksView turbolinksView = (TurbolinksView) view;
-                helperWebAct.visitTurbolinksView(turbolinksView, route.getUrl());
+            if (view instanceof TurbolinksViewGroup) {
+                TurbolinksViewGroup turbolinksViewGroup = (TurbolinksViewGroup) view;
+                helperWebAct.visitTurbolinksView(turbolinksViewGroup.getTurbolinksView(), route.getUrl());
                 TurbolinksSession.resetDefault();
             }
         }
@@ -212,6 +226,12 @@ public class TabbedActivity extends ReactAppCompatActivity implements GenericNat
                         return true;
                     }
                 });
+    }
+
+    private TurbolinksViewGroup getTurbolinksViewGroupByIndex(int tabIndex) {
+        TurbolinksViewPager viewPager = findViewById(R.id.viewpager);
+        TurbolinksPagerAdapter adapter = (TurbolinksPagerAdapter) viewPager.getAdapter();
+        return (TurbolinksViewGroup) adapter.getItem(tabIndex);
     }
 
 }

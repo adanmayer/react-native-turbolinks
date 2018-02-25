@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
 
+import com.facebook.react.ReactInstanceManager;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContext;
@@ -15,11 +16,13 @@ import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.common.MapBuilder;
 import com.facebook.react.common.ReactConstants;
 import com.reactlibrary.activities.GenericActivity;
+import com.reactlibrary.activities.GenericWebActivity;
 import com.reactlibrary.activities.NativeActivity;
 import com.reactlibrary.activities.TabbedActivity;
 import com.reactlibrary.activities.WebActivity;
 import com.reactlibrary.util.TurbolinksRoute;
 import com.reactlibrary.util.TurbolinksTabBar;
+import com.reactlibrary.util.TurbolinksViewGroup;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -64,10 +67,13 @@ public class RNTurbolinksModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void replaceWith(ReadableMap route, Integer tabIndex) {
-        TurbolinksRoute tRoute = new TurbolinksRoute(route);
-        tRoute.setAction(ACTION_REPLACE);
-        presentNativeView(tRoute, false);
+    public void replaceWith(final ReadableMap route,final Integer tabIndex) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                TurbolinksRoute tRoute = new TurbolinksRoute(route);
+                ((GenericWebActivity) getCurrentActivity()).renderComponent(tRoute, tabIndex);
+            }
+        });
     }
 
     @ReactMethod
@@ -92,8 +98,10 @@ public class RNTurbolinksModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void reloadVisitable() {
-        prevRoute.setAction(ACTION_REPLACE);
-        presentActivityForSession(prevRoute, false);
+        runOnUiThread(new Runnable() {
+            public void run() {((GenericWebActivity) getCurrentActivity()).reload();
+            }
+        });
     }
 
     @ReactMethod
@@ -154,7 +162,7 @@ public class RNTurbolinksModule extends ReactContextBaseJavaModule {
         try {
             ReactContext context = getReactApplicationContext();
             Boolean isActionReplace = route.getAction().equals(ACTION_REPLACE);
-            URL prevUrl = initial ? new URL(route.getUrl()) : new URL(prevRoute.getUrl());
+            URL prevUrl = initial || prevRoute == null ? new URL(route.getUrl()) : new URL(prevRoute.getUrl());
             URL nextUrl = new URL(route.getUrl());
             if (Objects.equals(prevUrl.getHost(), nextUrl.getHost())) {
                 Intent intent = new Intent(getReactApplicationContext(), WebActivity.class);

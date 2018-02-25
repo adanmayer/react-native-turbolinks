@@ -6,11 +6,11 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.webkit.JavascriptInterface;
 
-import com.basecamp.turbolinks.TurbolinksView;
 import com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter;
 import com.reactlibrary.R;
 import com.reactlibrary.react.ReactAppCompatActivity;
 import com.reactlibrary.util.TurbolinksRoute;
+import com.reactlibrary.util.TurbolinksViewGroup;
 
 import static com.reactlibrary.RNTurbolinksModule.INTENT_INITIAL_VISIT;
 import static com.reactlibrary.RNTurbolinksModule.INTENT_MESSAGE_HANDLER;
@@ -26,7 +26,7 @@ public class WebActivity extends ReactAppCompatActivity implements GenericWebAct
     private String userAgent;
     private Boolean initialVisit;
     private Boolean navigationBarHidden;
-    private TurbolinksView turbolinksView;
+    private TurbolinksViewGroup turbolinksViewGroup;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,8 +41,8 @@ public class WebActivity extends ReactAppCompatActivity implements GenericWebAct
         userAgent = getIntent().getStringExtra(INTENT_USER_AGENT);
 
         helperAct.renderToolBar((Toolbar) findViewById(R.id.toolbar));
-        turbolinksView = findViewById(R.id.turbolinks_view);
-        helperAct.visitTurbolinksView(turbolinksView, route.getUrl());
+        turbolinksViewGroup = findViewById(R.id.turbolinks_view);
+        helperAct.visitTurbolinksView(turbolinksViewGroup.getTurbolinksView(), route.getUrl());
     }
 
     @Override
@@ -53,12 +53,12 @@ public class WebActivity extends ReactAppCompatActivity implements GenericWebAct
 
     @Override
     public void onReceivedError(int errorCode) {
-        helperAct.onReceivedError(errorCode);
+        helperAct.onReceivedError(errorCode, 0);
     }
 
     @Override
     public void requestFailedWithStatusCode(int statusCode) {
-        helperAct.requestFailedWithStatusCode(statusCode);
+        helperAct.requestFailedWithStatusCode(statusCode, 0);
     }
 
     @Override
@@ -134,8 +134,8 @@ public class WebActivity extends ReactAppCompatActivity implements GenericWebAct
     }
 
     @Override
-    public TurbolinksView getTurbolinksView() {
-        return turbolinksView;
+    public TurbolinksViewGroup getTurbolinksViewGroup() {
+        return turbolinksViewGroup;
     }
 
     @Override
@@ -148,8 +148,18 @@ public class WebActivity extends ReactAppCompatActivity implements GenericWebAct
         return userAgent;
     }
 
+    @Override
+    public void renderComponent(TurbolinksRoute tRoute, int tabIndex) {
+        turbolinksViewGroup.renderComponent(getReactInstanceManager(), tRoute);
+    }
+
+    @Override
+    public void reload() { turbolinksViewGroup.reload(route.getUrl()); }
+
     @JavascriptInterface
     public void postMessage(String message) {
         helperAct.postMessage(message);
     }
+
+
 }
