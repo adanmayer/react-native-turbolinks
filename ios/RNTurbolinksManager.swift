@@ -16,14 +16,19 @@ class RNTurbolinksManager: RCTEventEmitter {
     var messageHandler: String?
     var userAgent: String?
     var customMenuIcon: UIImage?
-    var loadingView: String?    
+    var loadingView: String?
     fileprivate var _processPool: WKProcessPool?
+    fileprivate var _mountView: UIView?
     
     var processPool: WKProcessPool {
         if (_processPool == nil) {
             _processPool = WKProcessPool()
         }
         return _processPool!;
+    }
+    
+    deinit {
+        removeFromRootViewController()
     }
     
     fileprivate var application: UIApplication {
@@ -75,24 +80,40 @@ class RNTurbolinksManager: RCTEventEmitter {
         navigation.popViewController(animated: true)
     }
     
+    fileprivate func mountViewController(_ viewController: UIViewController) {
+        removeFromRootViewController() // remove existing childViewController, in case of debug reloading...
+        addToRootViewController(viewController)
+    }
+    
     @objc func startSingleScreenApp(_ route: Dictionary<AnyHashable, Any>,_ options: Dictionary<AnyHashable, Any>) {
         setAppOptions(options)
-        removeFromRootViewController() // remove existing childViewController, in case of debug reloading...
         navigationController = NavigationController(self, route, 0)
-        addToRootViewController(navigationController)
+        mountViewController(navigationController)
         visit(route)
     }
     
     @objc func startTabBasedApp(_ routes: Array<Dictionary<AnyHashable, Any>> ,_ options: Dictionary<AnyHashable, Any> ,_ selectedIndex: Int) {
         setAppOptions(options)
-        removeFromRootViewController() // remove existing childViewController, in case of debug reloading...
         tabBarController = TabBarController()
         tabBarController.viewControllers = routes.enumerated().map { (index, route) in NavigationController(self, route, index) }
         tabBarController.tabBar.barTintColor = tabBarBarTintColor ?? tabBarController.tabBar.barTintColor
         tabBarController.tabBar.tintColor = tabBarTintColor ?? tabBarController.tabBar.tintColor
-        addToRootViewController(tabBarController)
+        mountViewController(tabBarController)
         visitTabRoutes(routes)
         tabBarController.selectedIndex = selectedIndex
+    }
+    
+    @objc func startAppInView(_ reactTag: NSNumber!, _ route: Dictionary<AnyHashable, Any>,_ options: Dictionary<AnyHashable, Any>) {
+        let manager:RCTUIManager =  self.bridge.uiManager!
+        
+        // we have to exec on methodQueue
+        manager.methodQueue.async {
+            manager.addUIBlock { (uiManager: RCTUIManager?, viewRegistry:[NSNumber : UIView]?) in
+                self._mountView = uiManager!.view(forReactTag: reactTag)
+                self.startSingleScreenApp(route, options)
+                self._mountView = nil // reset mount view
+            }
+        }
     }
     
     @objc func visit(_ route: Dictionary<AnyHashable, Any>) {
@@ -201,7 +222,11 @@ class RNTurbolinksManager: RCTEventEmitter {
     
     fileprivate func addToRootViewController(_ viewController: UIViewController) {
         rootViewController.addChildViewController(viewController)
-        rootViewController.view.addSubview(viewController.view)
+        if (_mountView != nil) {
+            _mountView!.addSubview(viewController.view)
+        } else {
+            rootViewController.view.addSubview(viewController.view)
+        }
     }
     
     fileprivate func removeFromRootViewController() {

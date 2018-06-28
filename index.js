@@ -20,6 +20,11 @@ class Turbolinks {
     RNTurbolinksManager.startTabBasedApp(routes, options, selectedIndex)
   }
 
+  static startAppInView(viewTag, route, options = {}) {
+    this._processAppOptions(options)
+    RNTurbolinksManager.startAppInView(viewTag, route, options)
+  }
+
   static reloadVisitable() {
     RNTurbolinksManager.reloadVisitable()
   }
