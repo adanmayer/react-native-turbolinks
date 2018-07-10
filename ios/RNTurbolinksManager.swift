@@ -16,16 +16,9 @@ class RNTurbolinksManager: RCTEventEmitter {
     var messageHandler: String?
     var userAgent: String?
     var customMenuIcon: UIImage?
-    var loadingView: String?
-    fileprivate var _processPool: WKProcessPool?
+    var loadingView: String?    
+    lazy var processPool = WKProcessPool()
     fileprivate var _mountView: UIView?
-    
-    var processPool: WKProcessPool {
-        if (_processPool == nil) {
-            _processPool = WKProcessPool()
-        }
-        return _processPool!;
-    }
     
     deinit {
         removeFromRootViewController()
