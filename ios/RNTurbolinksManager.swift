@@ -24,7 +24,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         removeFromRootViewController()
     }
     
-    fileprivate var application: UIApplication {
+    var application: UIApplication {
         return UIApplication.shared
     }
     

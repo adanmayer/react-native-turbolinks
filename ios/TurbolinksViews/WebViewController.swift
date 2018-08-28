@@ -40,8 +40,9 @@ class WebViewController: VisitableViewController {
     
     fileprivate func fixScrollWebView() {
         let navBar = navigationController!.navigationBar
-        let navBarHeight = route.navBarHidden ? 0 : navBar.frame.size.height
-        visitableView.contentInset = UIEdgeInsetsMake(navBarHeight + 20, 0, 0, 0)
+        let navBarHeight = navBar.frame.size.height
+        let statusBarHeight = manager.application.statusBarFrame.size.height
+        visitableView.contentInset = UIEdgeInsetsMake(navBarHeight + statusBarHeight, 0, 0, 0)
     }
     
     fileprivate func setWebViewTitle() {
