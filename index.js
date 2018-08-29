@@ -25,6 +25,10 @@ class Turbolinks {
     RNTurbolinksManager.startAppInView(viewTag, route, options)
   }
 
+  static setCookies(cookies, url) {
+    RNTurbolinksManager.setCookies(cookies, url)
+  }
+
   static reloadVisitable() {
     RNTurbolinksManager.reloadVisitable()
   }

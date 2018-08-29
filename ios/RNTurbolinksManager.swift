@@ -82,6 +82,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         setAppOptions(options)
         navigationController = NavigationController(self, route, 0)
         mountViewController(navigationController)
+        self.injectCookies()
         visit(route)
     }
     
@@ -92,6 +93,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         tabBarController.tabBar.barTintColor = tabBarBarTintColor ?? tabBarController.tabBar.barTintColor
         tabBarController.tabBar.tintColor = tabBarTintColor ?? tabBarController.tabBar.tintColor
         mountViewController(tabBarController)
+        self.injectCookies()
         visitTabRoutes(routes)
         tabBarController.selectedIndex = selectedIndex
     }
@@ -109,6 +111,29 @@ class RNTurbolinksManager: RCTEventEmitter {
         }
     }
     
+    @objc func setCookies(_ cookies: Dictionary<AnyHashable, Any>, _ url: String) {
+        var cookieArray: [HTTPCookie] = []
+        for key in cookies.keys {
+            let values:Dictionary<AnyHashable, String> = RCTConvert.nsDictionary(cookies[key])! as! Dictionary<AnyHashable, String>
+            let cookie = HTTPCookie(properties: [
+                .domain: values["domain"]! as String,
+                .path: "/",
+                .name: key,
+                .value: values["value"]! as String,
+                .secure: "TRUE",
+                .expires: values["expires"]! as String,
+                .discard: "FALSE",
+                .version: 1
+                ])!
+            cookieArray.append(cookie)
+        }
+        let cookies = HTTPCookieStorage.shared.cookies(for: URL.init(string: url)!) ?? []
+        for (cookie) in cookies {
+            HTTPCookieStorage.shared.deleteCookie(cookie)
+        }
+        HTTPCookieStorage.shared.setCookies(cookieArray, for: URL.init(string: url), mainDocumentURL: nil)
+    }
+
     @objc func visit(_ route: Dictionary<AnyHashable, Any>) {
         let tRoute = TurbolinksRoute(route)
         if tRoute.url != nil {
@@ -147,6 +172,15 @@ class RNTurbolinksManager: RCTEventEmitter {
     @objc func notifyTabItem(_ value: String?,_ tabIndex: Int) {
         let tabItem = tabBarController.tabBar.items![tabIndex]
         tabItem.badgeValue = value
+    }
+
+    fileprivate func injectCookies() {
+        let cookies = HTTPCookieStorage.shared.cookies ?? []
+        for (cookie) in cookies {
+            if #available(iOS 11.0, *) {
+                self.session.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookie)
+            }
+        }
     }
     
     fileprivate func presentVisitableForSession(_ route: TurbolinksRoute) {
