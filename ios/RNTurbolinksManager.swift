@@ -82,8 +82,9 @@ class RNTurbolinksManager: RCTEventEmitter {
         setAppOptions(options)
         navigationController = NavigationController(self, route, 0)
         mountViewController(navigationController)
-        self.injectCookies()
-        visit(route)
+        self.injectCookies {
+            self.visit(route)
+        }
     }
     
     @objc func startTabBasedApp(_ routes: Array<Dictionary<AnyHashable, Any>> ,_ options: Dictionary<AnyHashable, Any> ,_ selectedIndex: Int) {
@@ -93,8 +94,9 @@ class RNTurbolinksManager: RCTEventEmitter {
         tabBarController.tabBar.barTintColor = tabBarBarTintColor ?? tabBarController.tabBar.barTintColor
         tabBarController.tabBar.tintColor = tabBarTintColor ?? tabBarController.tabBar.tintColor
         mountViewController(tabBarController)
-        self.injectCookies()
-        visitTabRoutes(routes)
+        self.injectCookies {
+            self.visitTabRoutes(routes)
+        }
         tabBarController.selectedIndex = selectedIndex
     }
     
@@ -121,8 +123,8 @@ class RNTurbolinksManager: RCTEventEmitter {
                 .name: key,
                 .value: values["value"]! as String,
                 .secure: "TRUE",
-                .expires: values["expires"]! as String,
                 .discard: "FALSE",
+                .expires:  Date.init(timeIntervalSinceNow:3600 * 365), // 1 year in the future
                 .version: 1
                 ])!
             cookieArray.append(cookie)
@@ -131,7 +133,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         for (cookie) in cookies {
             HTTPCookieStorage.shared.deleteCookie(cookie)
         }
-        HTTPCookieStorage.shared.setCookies(cookieArray, for: URL.init(string: url), mainDocumentURL: nil)
+        HTTPCookieStorage.shared.setCookies(cookieArray, for: URL.init(string: url)!, mainDocumentURL: nil)
     }
 
     @objc func visit(_ route: Dictionary<AnyHashable, Any>) {
@@ -174,15 +176,38 @@ class RNTurbolinksManager: RCTEventEmitter {
         tabItem.badgeValue = value
     }
 
-    fileprivate func injectCookies() {
-        let cookies = HTTPCookieStorage.shared.cookies ?? []
-        for (cookie) in cookies {
-            if #available(iOS 11.0, *) {
-                self.session.webView.configuration.websiteDataStore.httpCookieStore.setCookie(cookie)
+    fileprivate func injectCookies(_ completionHandler: (() -> Swift.Void)? = nil) {
+        // Force the creation of the datastore, before injecting cookies.
+        // issue introduced in iOS 11.3 see thread here: https://forums.developer.apple.com/thread/99674
+        
+        // delete cookies
+        let dataStore = self.navigation.session.webView.configuration.websiteDataStore
+        dataStore.fetchDataRecords(ofTypes: [WKWebsiteDataTypeCookies], completionHandler: { (records) -> Void in
+            dataStore.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { (records) in
+                // first remove all cookies
+                dataStore.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: records, completionHandler: {
+
+                    // after removing data we have to wait a little until we can add new stuff
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        let cookies = HTTPCookieStorage.shared.cookies ?? []
+                        for (cookie) in cookies {
+                            if #available(iOS 11.0, *) {
+                                dataStore.httpCookieStore.setCookie(cookie)
+                            }
+                        }
+                        
+                        // finished removing and adding cookies
+                        DispatchQueue.main.async {
+                            if (completionHandler != nil) {
+                                completionHandler!()
+                            }
+                        }
+                    }
+                })
             }
-        }
+        })
     }
-    
+   
     fileprivate func presentVisitableForSession(_ route: TurbolinksRoute) {
         let visitable = WebViewController(self, route)
         if route.action == .Advance {
