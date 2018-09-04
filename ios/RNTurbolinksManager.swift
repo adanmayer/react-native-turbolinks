@@ -16,11 +16,14 @@ class RNTurbolinksManager: RCTEventEmitter {
     var messageHandler: String?
     var userAgent: String?
     var customMenuIcon: UIImage?
-    var loadingView: String?    
-    lazy var processPool = WKProcessPool()
+    var loadingView: String?
+    var cookieArray: [HTTPCookie] = []
+    lazy var processPool:WKProcessPool? = WKProcessPool()
     fileprivate var _mountView: UIView?
     
     deinit {
+        processPool = nil
+        NotificationCenter.default.removeObserver(self)
         removeFromRootViewController()
     }
     
@@ -74,12 +77,19 @@ class RNTurbolinksManager: RCTEventEmitter {
     }
     
     fileprivate func mountViewController(_ viewController: UIViewController) {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(self.hotReloadInitiated),
+            name: NSNotification.Name(rawValue: "RCTBridgeWillReloadNotification"),
+            object: nil)
+        
         removeFromRootViewController() // remove existing childViewController, in case of debug reloading...
         addToRootViewController(viewController)
     }
     
     @objc func startSingleScreenApp(_ route: Dictionary<AnyHashable, Any>,_ options: Dictionary<AnyHashable, Any>) {
         setAppOptions(options)
+        tabBarController = nil
         navigationController = NavigationController(self, route, 0)
         mountViewController(navigationController)
         self.injectCookies {
@@ -89,6 +99,7 @@ class RNTurbolinksManager: RCTEventEmitter {
     
     @objc func startTabBasedApp(_ routes: Array<Dictionary<AnyHashable, Any>> ,_ options: Dictionary<AnyHashable, Any> ,_ selectedIndex: Int) {
         setAppOptions(options)
+        navigationController = nil
         tabBarController = TabBarController()
         tabBarController.viewControllers = routes.enumerated().map { (index, route) in NavigationController(self, route, index) }
         tabBarController.tabBar.barTintColor = tabBarBarTintColor ?? tabBarController.tabBar.barTintColor
@@ -103,18 +114,20 @@ class RNTurbolinksManager: RCTEventEmitter {
     @objc func startAppInView(_ reactTag: NSNumber!, _ route: Dictionary<AnyHashable, Any>,_ options: Dictionary<AnyHashable, Any>) {
         let manager:RCTUIManager =  self.bridge.uiManager!
         
-        // we have to exec on methodQueue
-        manager.methodQueue.async {
-            manager.addUIBlock { (uiManager: RCTUIManager?, viewRegistry:[NSNumber : UIView]?) in
-                self._mountView = uiManager!.view(forReactTag: reactTag)
-                self.startSingleScreenApp(route, options)
-                self._mountView = nil // reset mount view
+        clearCookies(-1) {
+            // we have to exec on methodQueue
+            manager.methodQueue.async {
+                manager.addUIBlock { (uiManager: RCTUIManager?, viewRegistry:[NSNumber : UIView]?) in
+                    self._mountView = uiManager!.view(forReactTag: reactTag)
+                    self.startSingleScreenApp(route, options)
+                    self._mountView = nil // reset mount view
+                }
             }
         }
     }
     
     @objc func setCookies(_ cookies: Dictionary<AnyHashable, Any>, _ url: String) {
-        var cookieArray: [HTTPCookie] = []
+        cookieArray = []
         for key in cookies.keys {
             let values:Dictionary<AnyHashable, String> = RCTConvert.nsDictionary(cookies[key])! as! Dictionary<AnyHashable, String>
             let cookie = HTTPCookie(properties: [
@@ -129,10 +142,10 @@ class RNTurbolinksManager: RCTEventEmitter {
                 ])!
             cookieArray.append(cookie)
         }
-        let cookies = HTTPCookieStorage.shared.cookies(for: URL.init(string: url)!) ?? []
-        for (cookie) in cookies {
-            HTTPCookieStorage.shared.deleteCookie(cookie)
-        }
+//        let cookies = HTTPCookieStorage.shared.cookies(for: URL.init(string: url)!) ?? []
+//        for (cookie) in cookies {
+//            HTTPCookieStorage.shared.deleteCookie(cookie)
+//        }
         HTTPCookieStorage.shared.setCookies(cookieArray, for: URL.init(string: url)!, mainDocumentURL: nil)
     }
 
@@ -175,38 +188,80 @@ class RNTurbolinksManager: RCTEventEmitter {
         let tabItem = tabBarController.tabBar.items![tabIndex]
         tabItem.badgeValue = value
     }
+    
+    fileprivate func clearCookies(_ index: Int, _ afterClearHandler: @escaping () -> Swift.Void) {
+        let dataStore = WKWebsiteDataStore.default()
+        if #available(iOS 11.0, *) {
+            dataStore.httpCookieStore.getAllCookies { (cookieArray) in
+                var idx = index
+                if (index == -1) {
+                    idx = cookieArray.count - 1
+                }
+                
+                if ((idx > 0) && (idx < cookieArray.count)) {
+                    HTTPCookieStorage.shared.deleteCookie(cookieArray[idx])
+                    dataStore.httpCookieStore.delete(cookieArray[idx], completionHandler: {
+                        self.clearCookies(idx - 1, afterClearHandler)
+                    })
+                } else {
+                    afterClearHandler()
+                }
+            }
+        } else {
+            dataStore.fetchDataRecords(ofTypes: [WKWebsiteDataTypeCookies], completionHandler: { (records) -> Void in
+                dataStore.removeData(ofTypes: [WKWebsiteDataTypeCookies], for: records, completionHandler: {
+                    afterClearHandler()
+                })
+            })
+        }
+    }
 
-    fileprivate func injectCookies(_ completionHandler: (() -> Swift.Void)? = nil) {
+    fileprivate func injectCookies(_ completionHandler: @escaping () -> Swift.Void) {
         // Force the creation of the datastore, before injecting cookies.
         // issue introduced in iOS 11.3 see thread here: https://forums.developer.apple.com/thread/99674
         
         // delete cookies
-        let dataStore = self.navigation.session.webView.configuration.websiteDataStore
-        dataStore.fetchDataRecords(ofTypes: [WKWebsiteDataTypeCookies], completionHandler: { (records) -> Void in
-            dataStore.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { (records) in
-                // first remove all cookies
-                dataStore.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), for: records, completionHandler: {
-
-                    // after removing data we have to wait a little until we can add new stuff
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        let cookies = HTTPCookieStorage.shared.cookies ?? []
-                        for (cookie) in cookies {
-                            if #available(iOS 11.0, *) {
-                                dataStore.httpCookieStore.setCookie(cookie)
-                            }
-                        }
-                        
-                        // finished removing and adding cookies
-                        DispatchQueue.main.async {
-                            if (completionHandler != nil) {
-                                completionHandler!()
-                            }
-                        }
-                    }
-                })
+        let dataStore = self.session.webView.configuration.websiteDataStore
+        dataStore.fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), completionHandler: { (records) -> Void in
+            for (cookie) in self.cookieArray {
+                if #available(iOS 11.0, *) {
+                    dataStore.httpCookieStore.setCookie(cookie)
+                }
             }
+            
+            self.waitUntilCookieSet(10, completionHandler)
         })
     }
+    
+    func waitUntilCookieSet(_ retries: Int, _ completionHandler: @escaping () -> Swift.Void) {
+        let dataStore = WKWebsiteDataStore.default()
+        if #available(iOS 11.0, *) {
+            dataStore.httpCookieStore.getAllCookies { (records) in
+                var missing = false
+                for indexCookie in self.cookieArray {
+                    let idx = (records.index(where: { (cookie) -> Bool in
+                        return (cookie.name == indexCookie.name)
+                    }))
+                    if (idx == nil) {
+                        missing = true;
+                        break;
+                    }
+                }
+                
+                if ((!missing) || (retries == 0)) {
+                    completionHandler()
+                } else {
+                    // finished removing and adding cookies
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+                        self.waitUntilCookieSet(retries - 1, completionHandler)
+                    })
+                }
+            }
+        } else {
+            completionHandler()
+        }
+    }
+    
    
     fileprivate func presentVisitableForSession(_ route: TurbolinksRoute) {
         let visitable = WebViewController(self, route)
@@ -280,6 +335,14 @@ class RNTurbolinksManager: RCTEventEmitter {
             rootViewController.view.addSubview(viewController.view)
         }
     }
+
+    @objc func hotReloadInitiated() {
+        self.navigation.session = nil
+        self.processPool = nil
+        self.navigationController = nil
+        self.tabBarController = nil
+        NotificationCenter.default.removeObserver(self)
+    }
     
     fileprivate func removeFromRootViewController() {
         var viewController: UIViewController?
@@ -290,6 +353,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         }
         
         if let vc = viewController {
+            vc.willMove(toParentViewController: nil)
             vc.view.removeFromSuperview()
             vc.removeFromParentViewController()
         }
