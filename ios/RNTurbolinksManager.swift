@@ -3,7 +3,7 @@ import Turbolinks
 
 @objc(RNTurbolinksManager)
 class RNTurbolinksManager: RCTEventEmitter {
-    
+    var initialRequest = false
     var tabBarController: TabBarController!
     var navigationController: NavigationController!
     var titleTextColor: UIColor?
@@ -22,7 +22,6 @@ class RNTurbolinksManager: RCTEventEmitter {
     fileprivate var _mountView: UIView?
     
     deinit {
-        processPool = nil
         NotificationCenter.default.removeObserver(self)
         removeFromRootViewController()
     }
@@ -85,6 +84,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         
         removeFromRootViewController() // remove existing childViewController, in case of debug reloading...
         addToRootViewController(viewController)
+        self.initialRequest = true
     }
     
     @objc func startSingleScreenApp(_ route: Dictionary<AnyHashable, Any>,_ options: Dictionary<AnyHashable, Any>) {
@@ -142,13 +142,13 @@ class RNTurbolinksManager: RCTEventEmitter {
                 ])!
             cookieArray.append(cookie)
         }
-//        let cookies = HTTPCookieStorage.shared.cookies(for: URL.init(string: url)!) ?? []
-//        for (cookie) in cookies {
-//            HTTPCookieStorage.shared.deleteCookie(cookie)
-//        }
+        //        let cookies = HTTPCookieStorage.shared.cookies(for: URL.init(string: url)!) ?? []
+        //        for (cookie) in cookies {
+        //            HTTPCookieStorage.shared.deleteCookie(cookie)
+        //        }
         HTTPCookieStorage.shared.setCookies(cookieArray, for: URL.init(string: url)!, mainDocumentURL: nil)
     }
-
+    
     @objc func visit(_ route: Dictionary<AnyHashable, Any>) {
         let tRoute = TurbolinksRoute(route)
         if tRoute.url != nil {
@@ -215,7 +215,7 @@ class RNTurbolinksManager: RCTEventEmitter {
             })
         }
     }
-
+    
     fileprivate func injectCookies(_ completionHandler: @escaping () -> Swift.Void) {
         // Force the creation of the datastore, before injecting cookies.
         // issue introduced in iOS 11.3 see thread here: https://forums.developer.apple.com/thread/99674
@@ -252,7 +252,7 @@ class RNTurbolinksManager: RCTEventEmitter {
                     completionHandler()
                 } else {
                     // finished removing and adding cookies
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6, execute: {
                         self.waitUntilCookieSet(retries - 1, completionHandler)
                     })
                 }
@@ -262,7 +262,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         }
     }
     
-   
+    
     fileprivate func presentVisitableForSession(_ route: TurbolinksRoute) {
         let visitable = WebViewController(self, route)
         if route.action == .Advance {
@@ -331,12 +331,20 @@ class RNTurbolinksManager: RCTEventEmitter {
         rootViewController.addChildViewController(viewController)
         if (_mountView != nil) {
             _mountView!.addSubview(viewController.view)
+            if (self.initialRequest) {
+                UIApplication.shared.isStatusBarHidden = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: {
+                    UIApplication.shared.isStatusBarHidden = false
+                })
+                self.initialRequest = false
+            }
         } else {
             rootViewController.view.addSubview(viewController.view)
         }
     }
-
+    
     @objc func hotReloadInitiated() {
+        self.clearCookies(-1, {})
         self.navigation.session = nil
         self.processPool = nil
         self.navigationController = nil
@@ -376,6 +384,11 @@ class RNTurbolinksManager: RCTEventEmitter {
     }
     
     func handleVisitCompleted(_ URL: URL,_ tabIndex: Int) {
+        // refresh statusbar
+        UIApplication.shared.isStatusBarHidden = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: {
+            UIApplication.shared.isStatusBarHidden = false
+        })
         sendEvent(withName: "turbolinksVisitCompleted", body: ["url": URL.absoluteString, "path": URL.path, "tabIndex": tabIndex])
     }
     
