@@ -92,9 +92,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         tabBarController = nil
         navigationController = NavigationController(self, route, 0)
         mountViewController(navigationController)
-        self.injectCookies {
-            self.visit(route)
-        }
+        self.visit(route)
     }
     
     @objc func startTabBasedApp(_ routes: Array<Dictionary<AnyHashable, Any>> ,_ options: Dictionary<AnyHashable, Any> ,_ selectedIndex: Int) {
@@ -114,14 +112,12 @@ class RNTurbolinksManager: RCTEventEmitter {
     @objc func startAppInView(_ reactTag: NSNumber!, _ route: Dictionary<AnyHashable, Any>,_ options: Dictionary<AnyHashable, Any>) {
         let manager:RCTUIManager =  self.bridge.uiManager!
         
-        clearCookies(-1) {
-            // we have to exec on methodQueue
-            manager.methodQueue.async {
-                manager.addUIBlock { (uiManager: RCTUIManager?, viewRegistry:[NSNumber : UIView]?) in
-                    self._mountView = uiManager!.view(forReactTag: reactTag)
-                    self.startSingleScreenApp(route, options)
-                    self._mountView = nil // reset mount view
-                }
+        // we have to exec on methodQueue
+        manager.methodQueue.async {
+            manager.addUIBlock { (uiManager: RCTUIManager?, viewRegistry:[NSNumber : UIView]?) in
+                self._mountView = uiManager!.view(forReactTag: reactTag)
+                self.startSingleScreenApp(route, options)
+                self._mountView = nil // reset mount view
             }
         }
     }
@@ -262,7 +258,6 @@ class RNTurbolinksManager: RCTEventEmitter {
         }
     }
     
-    
     fileprivate func presentVisitableForSession(_ route: TurbolinksRoute) {
         let visitable = WebViewController(self, route)
         if route.action == .Advance {
@@ -385,13 +380,10 @@ class RNTurbolinksManager: RCTEventEmitter {
     
     func handleVisitCompleted(_ URL: URL,_ tabIndex: Int) {
         // refresh statusbar
-        if (self.initialRequest) {
-            self.initialRequest = false;
-            UIApplication.shared.isStatusBarHidden = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: {
-                UIApplication.shared.isStatusBarHidden = false
-            })
-        }
+        UIApplication.shared.isStatusBarHidden = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: {
+            UIApplication.shared.isStatusBarHidden = false
+        })
         sendEvent(withName: "turbolinksVisitCompleted", body: ["url": URL.absoluteString, "path": URL.path, "tabIndex": tabIndex])
     }
     
