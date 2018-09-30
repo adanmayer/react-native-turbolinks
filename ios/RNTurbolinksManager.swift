@@ -385,6 +385,7 @@ class RNTurbolinksManager: RCTEventEmitter {
     func handleVisitCompleted(_ URL: URL,_ tabIndex: Int) {
         // refresh statusbar
         if (self.initialRequest) {
+            self.initialRequest = false
             UIApplication.shared.isStatusBarHidden = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: {
                 UIApplication.shared.isStatusBarHidden = false
