@@ -118,6 +118,9 @@ class RNTurbolinksManager: RCTEventEmitter {
                 self._mountView = uiManager!.view(forReactTag: reactTag)
                 self.startSingleScreenApp(route, options)
                 self._mountView = nil // reset mount view
+                DispatchQueue.main.async {
+                    self.handleViewMounted()
+                }
             }
         }
     }
@@ -326,6 +329,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         rootViewController.addChildViewController(viewController)
         if (_mountView != nil) {
             _mountView!.addSubview(viewController.view)
+            viewController.view.frame = _mountView!.frame
             if (self.initialRequest) {
                 UIApplication.shared.isStatusBarHidden = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: {
@@ -380,11 +384,17 @@ class RNTurbolinksManager: RCTEventEmitter {
     
     func handleVisitCompleted(_ URL: URL,_ tabIndex: Int) {
         // refresh statusbar
-        UIApplication.shared.isStatusBarHidden = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: {
-            UIApplication.shared.isStatusBarHidden = false
-        })
+        if (self.initialRequest) {
+            UIApplication.shared.isStatusBarHidden = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: {
+                UIApplication.shared.isStatusBarHidden = false
+            })
+        }
         sendEvent(withName: "turbolinksVisitCompleted", body: ["url": URL.absoluteString, "path": URL.path, "tabIndex": tabIndex])
+    }
+    
+    func handleViewMounted() {
+        sendEvent(withName: "turbolinksViewMounted", body: ["finished": "true"])
     }
     
     override static func requiresMainQueueSetup() -> Bool {
@@ -410,7 +420,7 @@ class RNTurbolinksManager: RCTEventEmitter {
     }
     
     override func supportedEvents() -> [String]! {
-        return ["turbolinksVisit", "turbolinksMessage", "turbolinksError", "turbolinksTitlePress", "turbolinksActionPress", "turbolinksLeftButtonPress", "turbolinksRightButtonPress", "turbolinksVisitCompleted"]
+        return ["turbolinksVisit", "turbolinksMessage", "turbolinksError", "turbolinksTitlePress", "turbolinksActionPress", "turbolinksLeftButtonPress", "turbolinksRightButtonPress", "turbolinksVisitCompleted", "turbolinksViewMounted", "turbolinksSessionFinished"]
     }
 }
 
@@ -430,6 +440,11 @@ extension RNTurbolinksManager: SessionDelegate {
     
     func sessionDidFinishRequest(_ session: Session) {
         application.isNetworkActivityIndicatorVisible = false
+        var url = session.webView.url
+        if (url == nil) {
+            url = URL.init(string: "")!
+        }
+        sendEvent(withName: "turbolinksSessionFinished", body: ["url": url!.absoluteString, "path": url!.path])
     }
 }
 
