@@ -92,6 +92,7 @@ class RNTurbolinksManager: RCTEventEmitter {
         tabBarController = nil
         navigationController = NavigationController(self, route, 0)
         mountViewController(navigationController)
+        navigationController.interactivePopGestureRecognizer?.isEnabled = false
         self.visit(route)
     }
     
